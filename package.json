@@ -1,0 +1,22 @@
+{
+  "name": "cafeteria-api",
+  "version": "1.0.0",
+  "description": "API REST del Laboratorio #2 (Caso 1: punto de venta e inventario de una cafetería)",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node --watch --disable-warning=ExperimentalWarning src/server.js",
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "db:reset": "node --disable-warning=ExperimentalWarning scripts/reset-db.js",
+    "probar": "node scripts/probar-api.js",
+    "postman": "node scripts/generar-postman.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^5.1.0"
+  }
+}
