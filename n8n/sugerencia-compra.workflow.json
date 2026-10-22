@@ -1,0 +1,129 @@
+{
+  "name": "Cafetería · Sugerencia de compra",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sugerencia-compra",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1f2c3d4-0001-4a10-9c01-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [0, 0],
+      "webhookId": "5b0e7c2a-6d1f-4c8e-9a3b-cafe00000001"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ 'Necesito una sugerencia de compra para cubrir ' + ($json.body?.dias_a_cubrir || 7) + ' días.' + ($json.body?.nota ? ' Nota de la cafetería: ' + $json.body.nota : ' No hay notas adicionales.') }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Sos el asistente de compras de una cafetería en Costa Rica. Respondés siempre en español.\n\nTu trabajo: decidir qué insumos comprar y cuánto, con números justificados.\n\nReglas:\n1. Antes de responder, llamá SIEMPRE a la herramienta consultar_inventario. Usá solo esos datos; nunca inventes insumos ni cifras.\n2. La herramienta devuelve, por insumo: stock, stock_minimo, unidad, bajo_minimo, consumo_7_dias, consumo_diario y dias_de_cobertura (null si no se vendió). También ventas_semana con las unidades vendidas por producto.\n3. Incluí TODOS los insumos con bajo_minimo = true. Agregá también los que tengan dias_de_cobertura menor que los días a cubrir.\n4. Cantidad a comprar = consumo_diario × días a cubrir + stock_minimo − stock. Redondeá hacia arriba a un número entero. Si el resultado es menor que (stock_minimo − stock), usá (stock_minimo − stock). Nunca sugieras 0 ni números negativos.\n5. La unidad debe ser exactamente la del insumo: \"g\", \"ml\" o \"unidad\".\n6. Prioridad: \"alta\" si el stock es 0 o alcanza para menos de 2 días; \"media\" si está bajo el mínimo; \"baja\" en los demás casos.\n7. justificacion: una o dos oraciones con los números que usaste (consumo diario, días de cobertura, mínimo).\n8. resumen: una o dos oraciones para la persona encargada, diciendo qué es lo más urgente y por qué.\n9. Si la nota menciona un evento o más clientes, aumentá las cantidades de lo que se va a usar y explicalo en la justificación.\n10. Si no hace falta comprar nada, devolvé compras como lista vacía y decilo en el resumen.",
+          "maxIterations": 6,
+          "enableStreaming": false,
+          "forceToolCallOnFirstIteration": true
+        }
+      },
+      "id": "a1f2c3d4-0002-4a10-9c01-000000000002",
+      "name": "Agente de compras",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [260, 0],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "a1f2c3d4-0003-4a10-9c01-000000000003",
+      "name": "Groq Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [120, 240]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Devuelve el inventario actual de la cafetería y el consumo real de los últimos 7 días: insumos (stock, stock_minimo, unidad, bajo_minimo, consumo_7_dias, consumo_diario, dias_de_cobertura), la lista insumos_bajo_minimo y ventas_semana (unidades vendidas por producto). No necesita parámetros.",
+        "url": "http://localhost:3000/api/resumen/compras",
+        "options": {}
+      },
+      "id": "a1f2c3d4-0004-4a10-9c01-000000000004",
+      "name": "consultar_inventario",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.5,
+      "position": [300, 240]
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"resumen\": \"Tres insumos están bajo el mínimo. Lo más urgente es el croissant: se agotó y es lo más vendido de la semana.\",\n  \"compras\": [\n    {\n      \"insumo\": \"Croissant\",\n      \"cantidad\": 41,\n      \"unidad\": \"unidad\",\n      \"prioridad\": \"alta\",\n      \"justificacion\": \"Se venden 3,7 por día y no queda ninguno: para 7 días hacen falta 26 más el mínimo de 15.\"\n    }\n  ]\n}"
+      },
+      "id": "a1f2c3d4-0005-4a10-9c01-000000000005",
+      "name": "Formato de la respuesta",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [480, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, data: $json.output, error: null } }}",
+        "options": {}
+      },
+      "id": "a1f2c3d4-0006-4a10-9c01-000000000006",
+      "name": "Responder sugerencia",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [620, -100]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, data: null, error: 'El agente no pudo generar la sugerencia. ' + ($json.error?.message || $json.error || 'Revisá que la API esté corriendo y que la credencial de Groq sea válida.') } }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "a1f2c3d4-0007-4a10-9c01-000000000007",
+      "name": "Responder error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [620, 100]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Agente de compras", "type": "main", "index": 0 }]]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [[{ "node": "Agente de compras", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "consultar_inventario": {
+      "ai_tool": [[{ "node": "Agente de compras", "type": "ai_tool", "index": 0 }]]
+    },
+    "Formato de la respuesta": {
+      "ai_outputParser": [[{ "node": "Agente de compras", "type": "ai_outputParser", "index": 0 }]]
+    },
+    "Agente de compras": {
+      "main": [
+        [{ "node": "Responder sugerencia", "type": "main", "index": 0 }],
+        [{ "node": "Responder error", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
