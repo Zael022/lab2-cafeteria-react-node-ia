@@ -1,106 +1,52 @@
-// Conexión a SQLite usando node:sqlite, el SQLite que YA VIENE dentro de
-// Node.js (versión 22.13 o superior). No hay que instalar ni compilar nada.
+// Conexión a PostgreSQL con un Pool de pg.
 //
-// SQLite no es un servidor: la base de datos es UN archivo
-// (backend/cafeteria.db). No hay usuario ni contraseña.
-// Analogía: PostgreSQL es una biblioteca con bibliotecaria (un programa
-// aparte que atiende pedidos); SQLite es un cuaderno que la API abre
-// y escribe directamente.
+// Analogía: el Pool es como tener varias cajeras listas. En vez de abrir
+// y cerrar una conexión por cada petición (lento), se reutilizan.
 //
-// node:sqlite es SÍNCRONO: cada consulta termina antes de pasar a la
-// siguiente línea, por eso los servicios no usan async/await.
+// PostgreSQL corre en Docker (ver docker-compose.yml en la raíz).
 import 'dotenv/config';
-import { DatabaseSync } from 'node:sqlite';
-import { fileURLToPath } from 'node:url';
-import path from 'node:path';
+import pg from 'pg';
 
-const carpetaBackend = fileURLToPath(new URL('..', import.meta.url));
-export const RUTA_BD = path.resolve(carpetaBackend, process.env.DB_FILE || 'cafeteria.db');
+const { Pool, types } = pg;
 
-export const db = new DatabaseSync(RUTA_BD);
+// Por defecto pg devuelve NUMERIC (1700) y BIGINT/COUNT (20) como texto
+// para no perder precisión. Nuestros montos caben sin problema en un
+// número de JavaScript, así que los convertimos para que el JSON
+// tenga 2000 y no "2000.00".
+types.setTypeParser(1700, (valor) => Number(valor));
+types.setTypeParser(20, (valor) => Number(valor));
 
-// SQLite trae las llaves foráneas APAGADAS por defecto: hay que
-// encenderlas en cada conexión o los REFERENCES no se respetan.
-db.exec('PRAGMA foreign_keys = ON');
-// Si otro programa (por ejemplo, la extensión de VS Code) está
-// escribiendo, esperamos hasta 5 s en vez de fallar al instante.
-db.exec('PRAGMA busy_timeout = 5000');
+const DATABASE_URL =
+  process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5433/cafeteria';
 
-// SQLite no tiene tipo BOOLEAN: guarda 0 y 1. Estas columnas las
-// convertimos a true/false para que el JSON quede limpio.
-const COLUMNAS_BOOLEANAS = new Set([
-  'activo',
-  'disponible',
-  'bajo_minimo',
-  'se_puede_anular',
-  'dentro_del_plazo',
-]);
-
-// Y al revés: SQLite no acepta true/false como parámetro, solo números.
-// Los arreglos se mandan como JSON para usarlos con json_each(?).
-function prepararParametro(valor) {
-  if (typeof valor === 'boolean') return valor ? 1 : 0;
-  if (Array.isArray(valor)) return JSON.stringify(valor);
-  if (valor === undefined) return null;
-  return valor;
-}
-
-function convertirFila(fila) {
-  const limpia = { ...fila }; // copia como objeto normal de JavaScript
-  for (const columna of Object.keys(limpia)) {
-    if (COLUMNAS_BOOLEANAS.has(columna) && limpia[columna] !== null) {
-      limpia[columna] = limpia[columna] === 1;
-    }
-  }
-  return limpia;
-}
-
-// ¿La sentencia devuelve filas? SELECT, WITH ... SELECT o
-// INSERT/UPDATE con RETURNING. Las demás solo cambian datos.
-function devuelveFilas(sql) {
-  return /^\s*(SELECT|WITH)\b/i.test(sql) || /\bRETURNING\b/i.test(sql);
-}
-
-/**
- * Ejecuta una consulta parametrizada.
- * Los valores van como "?" y se pasan en el arreglo `params`, NUNCA
- * pegados dentro del texto del SQL (eso evita la inyección SQL).
- *
- * Devuelve { rows, rowCount }: las filas encontradas y cuántas hubo
- * (o, en un UPDATE/DELETE, cuántas filas se modificaron).
- */
-export function query(sql, params = []) {
-  const sentencia = db.prepare(sql);
-  const valores = params.map(prepararParametro);
-
-  if (devuelveFilas(sql)) {
-    const rows = sentencia.all(...valores).map(convertirFila);
-    return { rows, rowCount: rows.length };
-  }
-  const info = sentencia.run(...valores);
-  return { rows: [], rowCount: Number(info.changes) };
-}
+export const pool = new Pool({
+  connectionString: DATABASE_URL,
+  // Cada conexión usa la zona horaria del negocio: así fecha::date y
+  // CURRENT_DATE significan "el día en Costa Rica" y no "el día en UTC".
+  options: `-c TimeZone=${process.env.TIMEZONE || 'America/Costa_Rica'}`,
+});
 
 /**
  * Ejecuta una función dentro de una transacción.
  *
- * BEGIN IMMEDIATE → abre la transacción y reserva la base para escribir
- * COMMIT          → si todo salió bien, guarda todos los cambios juntos
- * ROLLBACK        → si algo lanzó un error, deshace TODO lo que se hizo
+ * BEGIN    → abre la transacción
+ * COMMIT   → si todo salió bien, guarda todos los cambios juntos
+ * ROLLBACK → si algo lanzó un error, deshace TODO lo que se hizo
  *
- * ¿Por qué IMMEDIATE? Un BEGIN normal en SQLite no bloquea nada hasta
- * la primera escritura. IMMEDIATE toma el permiso de escritura desde el
- * inicio, así nadie más puede cambiar el stock entre que lo leemos y
- * lo descontamos (es el equivalente a SELECT ... FOR UPDATE de PostgreSQL).
+ * Importante: todas las consultas de la transacción deben usar el mismo
+ * `client` (no `pool.query`), porque la transacción vive en UNA conexión.
  */
-export function withTransaction(trabajo) {
-  db.exec('BEGIN IMMEDIATE');
+export async function withTransaction(trabajo) {
+  const client = await pool.connect();
   try {
-    const resultado = trabajo();
-    db.exec('COMMIT');
+    await client.query('BEGIN');
+    const resultado = await trabajo(client);
+    await client.query('COMMIT');
     return resultado;
   } catch (error) {
-    db.exec('ROLLBACK');
+    await client.query('ROLLBACK');
     throw error; // el middleware de errores decide el código HTTP
+  } finally {
+    client.release(); // devolvemos la conexión al Pool siempre
   }
 }

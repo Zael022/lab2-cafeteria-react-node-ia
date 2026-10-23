@@ -7,7 +7,7 @@ La cafetería controla su inventario por **insumos**: cada producto tiene una **
 
 > **Estado:** ✅ Base de datos + API · ✅ Front en React · ✅ Agente de IA en n8n
 
-**Stack:** Node.js + Express 5 · SQLite (node:sqlite, incluido en Node) · React (Vite) + React Router · n8n con AI Agent
+**Stack:** Node.js + Express 5 · PostgreSQL 16 (en Docker) · React (Vite) + React Router · n8n con AI Agent
 
 ---
 
@@ -15,15 +15,17 @@ La cafetería controla su inventario por **insumos**: cada producto tiene una **
 
 ```
 lab2-cafeteria/
+├── docker-compose.yml         # PostgreSQL + pgAdmin (puertos 5433 y 5051)
+├── pgadmin/servers.json       # Servidor ya registrado en pgAdmin
 ├── schema.sql                 # Tablas, llaves, restricciones y datos de ejemplo
-├── backend/                   # API REST (Node.js + Express 5 + SQLite)
+├── backend/                   # API REST (Node.js + Express 5 + PostgreSQL)
 │   ├── src/
 │   │   ├── routes/            # Definen las rutas REST
 │   │   ├── controllers/       # Reciben la petición y responden
 │   │   ├── services/          # Reglas de negocio y consultas a la BD
 │   │   ├── middlewares/       # Manejo central de errores
 │   │   ├── utils/             # Validaciones, errores HTTP y constantes
-│   │   ├── db.js              # Conexión a SQLite + helper de transacciones
+│   │   ├── db.js              # Pool de pg + helper de transacciones
 │   │   ├── app.js             # Configuración de Express
 │   │   └── server.js          # Arranque
 │   ├── scripts/               # db:reset, pruebas y generador de la colección
@@ -53,45 +55,45 @@ lab2-cafeteria/
 erDiagram
     PRODUCTOS ||--o{ RECETAS : "se prepara con"
     INSUMOS   ||--o{ RECETAS : "se usa en"
-    PEDIDOS   ||--|{ PEDIDO_ITEMS : "contiene"
+    PEDIDOS   ||--o{ PEDIDO_ITEMS : "contiene"
     PRODUCTOS ||--o{ PEDIDO_ITEMS : "se vende en"
 
     INSUMOS {
         int id PK
         text nombre "UNIQUE, NOT NULL"
         text unidad "g | ml | unidad"
-        real stock "CHECK >= 0"
-        real stock_minimo "CHECK >= 0"
+        numeric stock "CHECK >= 0"
+        numeric stock_minimo "CHECK >= 0"
     }
     PRODUCTOS {
         int id PK
         text nombre "UNIQUE, NOT NULL"
-        real precio "CHECK > 0"
+        numeric precio "CHECK > 0"
         text categoria "4 categorías"
-        int activo "0 | 1"
+        boolean activo
     }
     RECETAS {
         int id PK
         int producto_id FK "ON DELETE CASCADE"
         int insumo_id FK "ON DELETE RESTRICT"
-        real cantidad "CHECK > 0"
+        numeric cantidad "CHECK > 0"
     }
     PEDIDOS {
         int id PK
-        text fecha "ISO 8601 en UTC"
+        timestamptz fecha
         text metodo_pago "efectivo | tarjeta | sinpe"
-        real subtotal
-        real impuesto
-        real total
+        numeric subtotal
+        numeric impuesto
+        numeric total
         text estado "confirmado | anulado"
-        text fecha_anulacion
+        timestamptz fecha_anulacion
     }
     PEDIDO_ITEMS {
         int id PK
         int pedido_id FK "ON DELETE CASCADE"
         int producto_id FK "ON DELETE RESTRICT"
         int cantidad "CHECK > 0"
-        real precio_unitario "precio del momento"
+        numeric precio_unitario "precio del momento"
     }
 ```
 
@@ -102,32 +104,49 @@ erDiagram
 ## Cómo levantar el proyecto
 
 ### Requisitos
-- Node.js 22.13 o superior (probado con Node 22 y 24). Para verlo: `node -v`.
-- Nada más: SQLite viene **incluido dentro de Node** (`node:sqlite`), así que no se instala ni se compila nada. La base de datos es un archivo (`backend/cafeteria.db`) que se crea solo.
-- Opcional: extensión **SQLite** (alexcvzz) de VS Code para ver y consultar la base.
+- Node.js 20 o superior (`node -v`).
+- **Docker Desktop** encendido, con PostgreSQL corriendo (el tuyo o el de este repo, ver abajo).
 
-### 1. Base de datos y API
+### 1. Base de datos (PostgreSQL en Docker)
+
+Hay dos formas. Elegí **una**:
+
+**A) Usar un PostgreSQL que ya tenés en Docker** (por ejemplo en el puerto 5432):
+1. Copiá `backend/.env.example` como `backend/.env` y poné tus datos en `DATABASE_URL`:
+   ```
+   DATABASE_URL=postgresql://TU_USUARIO:TU_CONTRASEÑA@localhost:5432/cafeteria
+   ```
+   Usuario y contraseña son los de `POSTGRES_USER` y `POSTGRES_PASSWORD` de tu docker-compose.
+2. Crear la base `cafeteria` y cargar los datos:
+   ```bash
+   cd backend
+   npm install
+   npm run db:reset
+   ```
+
+**B) Usar el `docker-compose.yml` de este repo** (PostgreSQL en el 5433 y pgAdmin en el 5051):
+```bash
+docker compose up -d          # en la raíz del repo; la primera vez carga schema.sql solo
+cd backend
+cp .env.example .env          # en Windows: copy .env.example .env  (ya apunta al 5433)
+npm install
+```
+
+En los dos casos, `npm run db:reset` vuelve a los datos de ejemplo cuando haga falta.
+
+### 2. API
 
 ```bash
 cd backend
-npm install
-npm run db:reset   # crea backend/cafeteria.db y carga schema.sql
 npm run dev        # API en http://localhost:3000/api (se reinicia sola al guardar)
 ```
 
-`npm run dev` usa `node --watch`, el modo de Node que reinicia la API cada vez que guardás un archivo (hace lo mismo que nodemon, sin instalar nada).
+Si dice *"No se pudo conectar a PostgreSQL"*: Docker está apagado o `DATABASE_URL` tiene mal el usuario, la contraseña o el puerto.
 
-El `.env` es opcional: sin él se usan los valores de `.env.example`. Para cambiar el puerto o el nombre del archivo, copiá `.env.example` como `.env` y editalo.
-
-`npm run db:reset` se puede correr cuantas veces haga falta: borra todo y vuelve a los datos de ejemplo.
-
-### 2. Ver la base desde VS Code (extensión SQLite de alexcvzz)
-
-- **Ver tablas:** `Ctrl+Shift+P` → **SQLite: Open Database** → elegir `backend/cafeteria.db`. Aparece el panel **SQLITE EXPLORER** abajo a la izquierda, con las tablas; clic en ▶ al lado de una tabla para ver sus filas.
-- **Correr una consulta:** `Ctrl+Shift+P` → **SQLite: New Query**, escribir el SQL y luego clic derecho → **Run Query**.
-- **Cargar el schema desde la extensión** (alternativa a `npm run db:reset`): abrir `schema.sql`, clic derecho → **Run Query** y elegir `backend/cafeteria.db`.
-
-La extensión trae su propio ejecutable de SQLite. Si al usarla pide uno, se descarga *sqlite-tools* desde sqlite.org y se indica la ruta de `sqlite3.exe` en la configuración `sqlite.sqlite3` de VS Code.
+### Ver la base en pgAdmin
+- **Con tu propio pgAdmin:** en tu servidor → clic derecho en **Databases → Refresh** → aparece `cafeteria` → **Schemas → public → Tables**. Clic derecho en una tabla → **View/Edit Data → All Rows**.
+- **Con el del repo (opción B):** http://localhost:5051 → **Cafetería (lab 2)** (contraseña `postgres`).
+- Extra para la demo: clic derecho en la base → **ERD For Database** dibuja el diagrama desde la base.
 
 ### 3. Probar la API
 
@@ -277,14 +296,14 @@ Todas se validan **en el servidor** (`backend/src/services/`), aunque el front t
 Si cualquier paso lanza un error, se hace `ROLLBACK` y no queda nada a medias.
 
 ### Ventas simultáneas
-Las transacciones empiezan con `BEGIN IMMEDIATE`, que reserva el permiso de escritura desde el inicio (en SQLite no existe `SELECT ... FOR UPDATE`). Así nadie puede cambiar el stock entre que se revisa y se descuenta, ni siquiera otro programa que tenga la base abierta, como la extensión de VS Code. Además, `node:sqlite` es síncrono: Node termina una transacción completa antes de atender la siguiente petición. Probado: 14 pedidos simultáneos con 12 croissants → 12 aceptados, 2 rechazados con 409, stock final 0. Como red de seguridad extra, la tabla tiene `CHECK (stock >= 0)`.
+Al crear un pedido, los insumos se leen con `SELECT ... FOR UPDATE`. Si dos cajeros venden el último croissant al mismo tiempo, el segundo espera a que el primero termine y luego ve el stock ya descontado, así que recibe 409 en lugar de dejar el stock en negativo. Probado: 14 pedidos simultáneos con 12 croissants → 12 aceptados, 2 rechazados con 409, stock final 0. Como red de seguridad extra, la tabla tiene `CHECK (stock >= 0)`.
 
 ---
 
 ## Seguridad
 
-- Configuración en `backend/.env` (no se sube: está en `.gitignore`, junto con `node_modules` y el archivo `.db`).
-- **Todas** las consultas son parametrizadas (`?`); nunca se concatena lo que manda el cliente.
+- Credenciales solo en `backend/.env` (no se sube: está en `.gitignore`, junto con `node_modules`).
+- **Todas** las consultas son parametrizadas (`$1, $2...`); nunca se concatena lo que manda el cliente.
 - `ORDER BY` no admite parámetros, así que el criterio de orden se toma de una **lista blanca** (`ORDENES`); cualquier otro valor se ignora.
 - Los errores 500 no muestran detalles internos al cliente (solo se registran en la consola del servidor).
 - CORS limitado al origen del front (`CORS_ORIGIN`).
@@ -293,14 +312,9 @@ Las transacciones empiezan con `BEGIN IMMEDIATE`, que reserva el permiso de escr
 
 ## Decisiones y limitaciones conocidas
 
-- **SQLite en lugar de PostgreSQL.** El enunciado lo permite. No requiere instalar un servidor ni manejar usuario y contraseña; la base es un archivo.
-- **`node:sqlite` en lugar de `better-sqlite3`.** `better-sqlite3` es una librería nativa: en Windows con Node 24 intentó compilarse y pidió Python y Visual Studio Build Tools. `node:sqlite` viene dentro de Node, así que `npm install` solo baja Express, cors y dotenv. En Node 22 muestra un aviso de "función experimental"; los scripts lo ocultan con `--disable-warning=ExperimentalWarning`. Diferencias que se resolvieron en el código:
-  - Sin `BOOLEAN`: se guarda 0/1 y `db.js` lo convierte a `true`/`false` en el JSON.
-  - Sin tipo fecha: se guarda texto ISO 8601 en UTC y se usa `date(fecha, 'localtime')` y `julianday()` para comparar.
-  - Llaves foráneas apagadas por defecto: `db.js` las enciende con `PRAGMA foreign_keys = ON`.
-  - Sin `= ANY(arreglo)`: se usa `IN (SELECT value FROM json_each(?))`.
+- **PostgreSQL en Docker.** El enunciado lo recomienda. La API se probó primero con PostgreSQL, pasó a SQLite cuando no había un servidor disponible (en Windows la librería `better-sqlite3` pedía compilarse) y volvió a PostgreSQL cuando estuvo Docker. Ver la bitácora.
 - **Crear = confirmar.** En un punto de venta el pedido se cobra al momento, así que `POST /pedidos` crea el pedido ya confirmado y descuenta los insumos en la misma transacción.
-- **Zona horaria.** "Hoy" en el cierre de caja es el día según la hora de la computadora donde corre la API (Costa Rica).
-- **Montos.** Se guardan como `REAL` y se redondean a 2 decimales en cada cálculo.
+- **Zona horaria.** Cada conexión usa `America/Costa_Rica` (configurable con `TIMEZONE` en `.env`), para que "hoy" en el cierre de caja sea el día local y no el de UTC.
+- **Montos.** `NUMERIC(10,2)` en la base; `db.js` los convierte a número para que el JSON tenga `2000` y no `"2000.00"`.
 - **Devolución al anular.** Se calcula con la receta actual del producto. Si alguien cambiara la receta dentro de esos 15 minutos, la devolución usaría la receta nueva. Para eliminar ese caso habría que guardar el consumo de cada venta en una tabla aparte.
 - **Datos de ejemplo.** Las fechas de los pedidos son relativas al momento de cargar el schema, así que el panel siempre tiene ventas de "esta semana". Tres insumos (chocolate, croissant y vaso frío) quedan a propósito bajo el mínimo para el agente de IA.

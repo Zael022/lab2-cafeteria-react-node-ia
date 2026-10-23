@@ -11,8 +11,11 @@
       "id": "a1f2c3d4-0001-4a10-9c01-000000000001",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2.2,
-      "position": [0, 0],
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
       "webhookId": "5b0e7c2a-6d1f-4c8e-9a3b-cafe00000001"
     },
     {
@@ -31,12 +34,15 @@
       "name": "Agente de compras",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
-      "position": [260, 0],
+      "position": [
+        260,
+        0
+      ],
       "onError": "continueErrorOutput"
     },
     {
       "parameters": {
-        "model": "llama-3.3-70b-versatile",
+        "model": "openai/gpt-oss-120b",
         "options": {
           "temperature": 0.2
         }
@@ -45,7 +51,10 @@
       "name": "Groq Chat Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
       "typeVersion": 1,
-      "position": [120, 240]
+      "position": [
+        120,
+        240
+      ]
     },
     {
       "parameters": {
@@ -58,7 +67,10 @@
       "name": "consultar_inventario",
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.5,
-      "position": [300, 240]
+      "position": [
+        300,
+        240
+      ]
     },
     {
       "parameters": {
@@ -68,7 +80,10 @@
       "name": "Formato de la respuesta",
       "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
       "typeVersion": 1.3,
-      "position": [480, 240]
+      "position": [
+        480,
+        240
+      ]
     },
     {
       "parameters": {
@@ -79,8 +94,11 @@
       "id": "a1f2c3d4-0006-4a10-9c01-000000000006",
       "name": "Responder sugerencia",
       "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.5,
-      "position": [620, -100]
+      "typeVersion": 1.1,
+      "position": [
+        620,
+        -100
+      ]
     },
     {
       "parameters": {
@@ -93,27 +111,74 @@
       "id": "a1f2c3d4-0007-4a10-9c01-000000000007",
       "name": "Responder error",
       "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.5,
-      "position": [620, 100]
+      "typeVersion": 1.1,
+      "position": [
+        620,
+        100
+      ]
     }
   ],
   "connections": {
     "Webhook": {
-      "main": [[{ "node": "Agente de compras", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Agente de compras",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Groq Chat Model": {
-      "ai_languageModel": [[{ "node": "Agente de compras", "type": "ai_languageModel", "index": 0 }]]
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agente de compras",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
     },
     "consultar_inventario": {
-      "ai_tool": [[{ "node": "Agente de compras", "type": "ai_tool", "index": 0 }]]
+      "ai_tool": [
+        [
+          {
+            "node": "Agente de compras",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Formato de la respuesta": {
-      "ai_outputParser": [[{ "node": "Agente de compras", "type": "ai_outputParser", "index": 0 }]]
+      "ai_outputParser": [
+        [
+          {
+            "node": "Agente de compras",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Agente de compras": {
       "main": [
-        [{ "node": "Responder sugerencia", "type": "main", "index": 0 }],
-        [{ "node": "Responder error", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Responder sugerencia",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },

@@ -1,0 +1,61 @@
+# PostgreSQL + pgAdmin para el Laboratorio #2.
+#
+# Levantar:      docker compose up -d
+# pgAdmin web:   http://localhost:5051
+# Apagar:        docker compose down        (los datos se conservan)
+# Borrar todo:   docker compose down -v     (borra también los datos)
+#
+# Usa los puertos 5433 (PostgreSQL) y 5051 (pgAdmin) para no chocar con
+# otro PostgreSQL que ya tengas en el 5432/5050.
+#
+# Si ya tenés tu propio PostgreSQL en Docker, NO hace falta levantar
+# este: apuntá DATABASE_URL de backend/.env a tu base y corré
+# "npm run db:reset" (ver README).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lab2-cafeteria-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: cafeteria
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+      TZ: America/Costa_Rica
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_datos:/var/lib/postgresql/data
+      # La primera vez que se crea la base, PostgreSQL ejecuta solo los
+      # .sql de esta carpeta: así las tablas y los datos ya vienen cargados
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cafeteria"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  pgadmin:
+    image: dpage/pgadmin4:9.18
+    container_name: lab2-cafeteria-pgadmin
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@cafeteria.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+      # Modo escritorio: entra directo, sin pantalla de login
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    ports:
+      - "5051:80"
+    volumes:
+      # El servidor "Cafetería (lab 2)" ya aparece registrado en pgAdmin
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+      - pgadmin_datos:/var/lib/pgadmin
+
+volumes:
+  postgres_datos:
+  pgadmin_datos:

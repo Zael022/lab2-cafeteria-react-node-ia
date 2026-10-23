@@ -131,4 +131,25 @@ Una prueba manual: stock antes, crear pedido (2 capuchinos + 1 croissant), stock
 - El nodo "HTTP Request Tool" de LangChain que se usaba antes está oculto en n8n 2.x; se usó `httpRequestTool` (el nodo HTTP Request como herramienta).
 - En n8n 2.x ya no se "activa" un workflow: se **publica** (botón Publish).
 - Se activó "forzar uso de herramienta en la primera vuelta" para que el modelo no responda sin consultar el inventario.
-- *(completar: cómo respondió con mi credencial de Groq y qué ajusté)*
+- Al conectarlo con mi cuenta, n8n marcó el modelo `llama-3.3-70b-versatile` con advertencia: Groq lo retiró el 16/08/2026. Se cambió por `openai/gpt-oss-120b`, el reemplazo que recomienda Groq.
+- Al importarlo, mi n8n mostró el nodo Webhook con "?" ("Install this node to use it"): la versión 2.2 del nodo era más nueva que mi n8n. Se bajó a la versión 2 del Webhook y 1.1 del Respond to Webhook, que existen desde hace más tiempo.
+- *(completar: cómo respondió con mi credencial de Groq)*
+
+---
+
+### 8. Conectar el laboratorio a PostgreSQL en Docker
+
+**Prompt:**
+> Ya tengo Docker con PostgreSQL y pgAdmin web. ¿Cómo conecto el laboratorio para verlo ahí?
+
+**Qué devolvió la IA:**
+- Explicó que el laboratorio usaba SQLite (un archivo), por eso no aparecía en pgAdmin, y presentó ventajas y desventajas de migrar.
+- Volvió a la versión de la API con `pg`: `Pool`, transacciones `BEGIN`/`COMMIT`/`ROLLBACK` y `SELECT ... FOR UPDATE` para ventas simultáneas.
+- `npm run db:reset` crea la base `cafeteria` si no existe dentro de mi PostgreSQL y carga `schema.sql`.
+- Agregó un `docker-compose.yml` propio del repo (puertos 5433 y 5051) para quien clone el proyecto sin tener mi Docker.
+- Repitió las 44 pruebas, la de concurrencia y el recorrido completo del front: todo igual que con SQLite.
+
+**Qué corregí / rechacé:**
+- Se descartó levantar un segundo PostgreSQL en mi compu: uso el mío y solo cambio `DATABASE_URL` en `.env`.
+- *(completar)*
+

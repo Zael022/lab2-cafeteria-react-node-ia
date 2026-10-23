@@ -5,7 +5,7 @@ node_modules/
 .env
 .env.local
 
-# Base de datos SQLite (se genera con npm run db:reset a partir de schema.sql)
+# Archivos de bases SQLite viejas (el proyecto ahora usa PostgreSQL)
 *.db
 *.db-journal
 *.db-wal

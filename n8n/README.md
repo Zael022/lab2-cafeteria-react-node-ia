@@ -7,7 +7,7 @@
 ```
 Webhook (POST /webhook/sugerencia-compra)
    └─► Agente de compras (AI Agent)
-         ├─ modelo: Groq Chat Model (llama-3.3-70b-versatile)
+         ├─ modelo: Groq Chat Model (openai/gpt-oss-120b)
          ├─ herramienta: consultar_inventario → GET http://localhost:3000/api/resumen/compras
          └─ formato: Structured Output Parser → { resumen, compras: [...] }
    ├─► (salió bien)  Responder sugerencia → 200 { ok: true,  data, error: null }
@@ -23,7 +23,7 @@ Webhook (POST /webhook/sugerencia-compra)
 1. Levantá n8n: `npx n8n` y abrí http://localhost:5678.
 2. **Workflows → Import from File** (o el menú `…` → *Import from file*) y elegí `sugerencia-compra.workflow.json`.
 3. Abrí el nodo **Groq Chat Model** → *Credential* → elegí tu credencial de Groq (la misma del Laboratorio #1) o creá una nueva con tu API key.
-   - Si `llama-3.3-70b-versatile` no aparece en la lista de modelos, elegí otro de Groq que soporte herramientas (tool calling).
+   - Groq retiró `llama-3.3-70b-versatile` el 16/08/2026; su reemplazo recomendado es `openai/gpt-oss-120b`. Si tampoco aparece, elegí otro modelo de Groq que soporte herramientas (tool calling).
 4. Guardá y presioná **Publish** (arriba a la derecha). Sin publicar, el webhook de producción no responde.
 5. Con la API (`backend`) y el front corriendo, andá a **Asistente de compras** y presioná *Pedir sugerencia*.
 
@@ -40,6 +40,7 @@ curl -X POST http://localhost:5678/webhook/sugerencia-compra \
 | Lo que ves | Qué revisar |
 |---|---|
 | "No hay conexión con n8n" en el front | n8n no está corriendo (`npx n8n`) |
+| El nodo Webhook sale con "?" | Tu n8n es más viejo que la versión del nodo: borralo, agregá un Webhook nuevo (POST, path `sugerencia-compra`, Respond: *Using 'Respond to Webhook' Node*) y conectalo al agente |
 | 404 al llamar el webhook | El workflow no está publicado (botón **Publish**) |
 | `{ ok: false, error: "...credentials..." }` | Falta elegir la credencial de Groq en el nodo del modelo |
 | `{ ok: false }` y el agente no tiene datos | La API no está corriendo en el puerto 3000 |

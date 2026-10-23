@@ -1,17 +1,17 @@
 // Todos los errores terminan aquí. Este es el ÚNICO lugar donde se
 // decide el código HTTP de un error, así que todas las respuestas de
 // error tienen el mismo formato: { error: "mensaje" }.
-
 import { HttpError } from '../utils/httpError.js';
 
-// Códigos de error de SQLite (err.errcode) que traducimos a algo útil.
+// Códigos de error de PostgreSQL que traducimos a algo útil.
 // (Son una red de seguridad: los servicios ya validan antes.)
-const ERRORES_BD = {
-  787: [409, 'La operación viola una relación entre tablas (llave foránea)'], // SQLITE_CONSTRAINT_FOREIGNKEY
-  2067: [409, 'Ya existe un registro con ese valor único'],                  // SQLITE_CONSTRAINT_UNIQUE
-  275: [400, 'Un valor no cumple una restricción de la base de datos'],      // SQLITE_CONSTRAINT_CHECK
-  1299: [400, 'Falta un valor obligatorio'],                                 // SQLITE_CONSTRAINT_NOTNULL
-  5: [503, 'La base de datos está ocupada, intentá de nuevo'],               // SQLITE_BUSY
+const ERRORES_PG = {
+  '23503': [409, 'La operación viola una relación entre tablas (llave foránea)'],
+  '23505': [409, 'Ya existe un registro con ese valor único'],
+  '23514': [400, 'Un valor no cumple una restricción de la base de datos'],
+  '23502': [400, 'Falta un valor obligatorio'],
+  '22P02': [400, 'Un valor tiene un formato inválido'],
+  '22003': [400, 'Un número está fuera del rango permitido'],
 };
 
 export function errorHandler(err, req, res, _next) {
@@ -27,9 +27,9 @@ export function errorHandler(err, req, res, _next) {
     return res.status(err.status).json({ error: err.message });
   }
 
-  // 3. Errores conocidos de SQLite
-  if (err.errcode && ERRORES_BD[err.errcode]) {
-    const [status, mensaje] = ERRORES_BD[err.errcode];
+  // 3. Errores conocidos de PostgreSQL
+  if (err.code && ERRORES_PG[err.code]) {
+    const [status, mensaje] = ERRORES_PG[err.code];
     return res.status(status).json({ error: mensaje });
   }
 
